@@ -1,0 +1,16 @@
+sample_name 	fat_type 	concentration
+Contol_1	Control	None
+Contol_2	Control	None
+Contol_3	Control	None
+Contol_4	Control	None
+Contol_5	Control	None
+OPLA_1	OPLA	High
+OPLA_2	OPLA	High
+OPLA_3	OPLA	High
+OPLA_4	OPLA	High
+OPLA_5	OPLA	High
+POLA_1	POLA	High
+POLA_2	POLA	High
+POLA_3	POLA	High
+POLA_4	POLA	High
+POLA_5	POLA	High

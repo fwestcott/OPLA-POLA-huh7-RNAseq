@@ -1,0 +1,642 @@
+---
+title: "RNA Seq analysis"
+author: "Eloise Cross"
+date: "16/03/2021"
+output:
+  pdf_document:
+    keep_tex: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "H:/2020/RNA seq/OLPLAPOLA Seq/OPLAPOLASeq") 
+knitr::opts_chunk$set(fig.path= 'figures/ch2/rna_Seq/OPLA_POLA_huh7', echo=TRUE, warning = FALSE, message=FALSE, dev = 'png')
+```
+######## CONVERT TO A PDF FORMAL LATER ###########
+
+
+
+```{r packages, inlude =FALSE, message = FALSE}
+
+library(dplyr)
+library(FactoMineR)
+library(factoextra)
+library(EnhancedVolcano)
+library(clusterProfiler)
+library(pathview  )
+library(limma)
+library(edgeR)
+library(genefilter)
+library(data.table)
+library(cowplot)
+library(org.Hs.eg.db)
+library(gplots)
+library(pathview)
+#### THIS NEEDS POPULATING BUT TRY AND ENSURE THAT ONLY THE REQUIRED PACKAGES ARE INSTALLED ####
+
+```
+
+
+```{r load data, include =FALSE}
+rawcounts <- read.delim ('Counts_fpkm.txt', row.names  = 1)
+rawcounts$ensembl <- rownames(rawcounts)
+counts <- rawcounts[,1:15] %>% as.data.frame()
+
+#remove counts with no values
+#order by value
+counts <- counts[order(apply(counts, 1, sd), decreasing=T),]
+
+counts <- counts[apply(counts,1,sd)!=0,]
+
+
+cpm <- t(1e6*t(counts)/colSums(counts))
+
+```
+
+```{r sample data,include=FALSE}
+#read in sample info 
+samplemetadata <-read.delim ('Sample_info.txt')
+
+samplemetadata$ID <- colnames(counts)
+
+
+samplemetadata$Totalreads <- colSums(counts)
+
+ 
+```
+
+
+
+######### FROM HERE IS DATA ANALYSIS FROM FABIO TO GO THROUGH ########
+
+
+```{r test of pcas}
+
+
+hist(samplemetadata$Totalreads)
+
+samplemetadata <- data.frame(samplemetadata, prcomp (t(counts),center = T,scale. = T)$x[,1:5])
+
+plot(samplemetadata[,6:10])
+
+ind <- as.integer(factor(samplemetadata$fat_type))
+p1 <- plot(samplemetadata[,6:10], col = c('firebrick','steelblue', 'green')[ind], pch=20, cex = 1.2)
+
+
+```
+
+```{r, individual PCA}
+pca_res <- prcomp(t(cpm[1:1000,]), scale. = TRUE, centre=TRUE)
+
+screeplot(pca_res, type = "l",main = "screen plot first 10 PCs")
+
+p <- fviz_pca_ind(pca_res, geom.ind = "point", pointshape = 21, 
+             pointsize = 2, 
+             fill.ind = samplemetadata$fat_type,
+             palette = c("red","deepskyblue3","lightgreen"),
+             col.ind = "black", 
+             addEllipses = TRUE,
+             label = "var",
+             col.var = "black",
+             repel = TRUE,
+             legend.title = "Group") +
+   theme(axis.text.x = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.text.y = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.x = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.y = element_text(color = "black", size = 15, angle = 90, hjust = .5, vjust = .5, face = "plain"))
+
+p
+
+
+```
+
+
+```{r}
+
+
+####publishable quality PCA plot 
+
+
+res.pca <- PCA (counts, graph = FALSE)
+get_eig(res.pca)
+var <- get_pca(res.pca)
+var
+head(var$coord)
+
+
+ind <- get_pca_ind(res.pca)
+ind
+```
+
+```{r}
+
+test.pca <- PCA(counts, graph = FALSE)
+#fviz_pca_ind(test.pca, label = 'none',
+ #            #habillage = samplemetadata$ID
+  #          palette =  c("#00AFBB", "#E7B800", "#FC4E07")
+   #          ,addEllipses = TRUE )# Concentration ellipses
+
+    
+```
+
+
+# Results OPLA
+```{r}
+group <- samplemetadata$fat_type
+group <- factor(group)
+
+design <- model.matrix(~0+group)
+colnames(design) <- levels(group)
+
+
+contrast.matrix <- makeContrasts(POLAvsControl = POLA-Control, levels=design)
+contrast.matrix1 <- makeContrasts(OPLAvsControl = OPLA-Control, levels=design)
+
+
+dt <- DGEList(counts, group=group)
+dt <- calcNormFactors(dt, method = 'TMM')
+dt <- estimateDisp(dt,design, robust = TRUE)
+
+y <- estimateGLMCommonDisp(dt, design=design)
+y <- estimateGLMTrendedDisp(y, design = design)
+y <- estimateGLMTagwiseDisp(y, design=design)
+fit <- glmFit(y, design)
+
+
+res1 <- glmLRT(fit, contrast= contrast.matrix1)
+results1 <- topTags (res1, n=Inf)
+toptable1 <- results1$table
+toptable1$ensembl <- rownames(toptable1)
+
+
+symbol <- mapIds(x=org.Hs.eg.db, toptable1$ensembl, "SYMBOL","ENSEMBL")
+
+toptable1$symbol <- symbol
+
+toptable_opla <- toptable1
+
+
+#ven diagram of the top table results, then select which genes are significant and compare those between OPLA and POLA 
+#sort by FDR for signification (-0.05), sort by log fold changes and make a venn diagramme of these to leave a graph with up and down for opla and poal 
+
+#take the genes that are upregulated in both OPLA and POLA (middle of venn diagram) take 30 si RNAs - transfect into a plate and look at gene most important for fat accumulation (from measuring lipid droplet)
+
+```
+
+
+
+
+
+# Results POLA
+```{r}
+group <- samplemetadata$fat_type
+ group <- factor(group)
+
+design <- model.matrix(~0+group)
+colnames(design) <- levels(group)
+
+
+contrast.matrix <- makeContrasts(POLAvsControl = POLA-Control, levels=design)
+
+
+
+dt <- DGEList(counts, group=group)
+dt <- calcNormFactors(dt, method = 'TMM')
+dt <- estimateDisp(dt,design, robust = TRUE)
+
+y <- estimateGLMCommonDisp(dt, design=design)
+y <- estimateGLMTrendedDisp(y, design = design)
+y <- estimateGLMTagwiseDisp(y, design=design)
+fit <- glmFit(y, design)
+
+
+res1 <- glmLRT(fit, contrast= contrast.matrix)
+results1 <- topTags (res1, n=Inf)
+toptable1 <- results1$table
+toptable1$ensembl <- rownames(toptable1)
+
+
+symbol <- mapIds(org.Hs.eg.db, toptable1$ensembl, "SYMBOL","ENSEMBL")
+
+toptable1$symbol <- symbol
+
+toptable_pola <- toptable1
+
+
+
+```
+
+
+```{r, OPLA V POLA}
+
+contrast.matrix3 <- makeContrasts(POLAvsOPLA = POLA-OPLA, levels=design)
+
+res3 <- glmLRT(fit, contrast= contrast.matrix3)
+results3 <- topTags (res3, n=Inf)
+toptable3 <- results3$table
+toptable3$ensembl <- rownames(toptable3)
+
+
+symbol <- mapIds(x=org.Hs.eg.db, toptable3$ensembl, "SYMBOL","ENSEMBL")
+
+toptable3$symbol <- symbol
+
+ deg_OP <- toptable3 %>% filter(FDR <0.05)
+
+EnhancedVolcano(deg_OP,
+    lab = deg_OP$symbol,
+    x = 'logFC',
+    y = 'PValue',
+    pCutoff = 10e-12)
+
+```
+
+
+```{r}
+
+
+#select names from rawcounts to have the same column as toptable 
+#genes <- rawcounts[rawcounts$ensembl %in%  rownames(toptable), ]
+#remove raw count data 
+#genes <- genes[,-(1:15)]
+
+#bind the information with the values from toptable
+
+
+
+# this is what you need to build everything 
+#results <- merge(genes, toptable, by= 'ensembl')
+
+```
+
+```{r}
+#heat map 
+
+#sample distance matrix
+
+#do this before volcano
+
+```
+
+```{r, volcano pola }
+
+deg_pola <- toptable_pola %>% filter(FDR <0.05)
+
+
+#enhanced volc
+EnhancedVolcano(deg_pola,
+    lab = deg_pola$symbol,
+    x = 'logFC',
+    y = 'PValue',
+    pCutoff = 10e-12)
+
+```
+
+
+```{r, volcano opla }
+
+deg_opla <- toptable_opla %>% filter(FDR <0.05)
+
+
+#enhanced volc
+EnhancedVolcano(deg_opla,
+    lab = deg_opla$symbol,
+    x = 'logFC',
+    y = 'PValue',
+    pCutoff = 10e-12)
+
+```
+
+Venn diagrames of the top table results 
+
+#ven diagram of the top table results, then select which genes are significant and compare those between OPLA and POLA 
+#sort by FDR for signification (-0.05), sort by log fold changes and make a venn diagramme of these to leave a graph with up and down for opla and poal 
+
+#take the genes that are upregulated in both OPLA and POLA (middle of venn diagram) take 30 si RNAs - transfect into a plate and look at gene most important for fat accumulation (from measuring lipid droplet)
+
+
+```{r venn diagrames }
+
+#ven diagramme of results - simple how many are up or down in both samples seperatly 
+
+venn_opla_up <- deg_opla %>% filter(logFC >0)
+venn_opla_down <- deg_opla %>% filter(logFC <0)
+venn_pola_up <- deg_pola %>% filter(logFC >0)
+venn_pola_down <- deg_pola %>% filter(logFC <0)
+
+venn_up <-merge(venn_opla_up,venn_pola_up, by= "ensembl", all.x=TRUE, all.y=TRUE)
+
+OPLA_up <- venn_up[!is.na(venn_up$logFC.x), "ensembl"]
+POLA_up <- venn_up[!is.na(venn_up$logFC.y), "ensembl"]
+input_up <-list(OPLA_up=OPLA_up, POLA_up=POLA_up)
+venn(input_up)
+#down reg
+
+venn_down <-merge(venn_opla_down,venn_pola_down, by= "ensembl", all.x=TRUE, all.y=TRUE)
+
+OPLA_down <- venn_down[!is.na(venn_down$logFC.x), "ensembl"]
+POLA_down <- venn_down[!is.na(venn_down$logFC.y), "ensembl"]
+input_down <-list(OPLA_down=OPLA_down, POLA_down=POLA_down)
+venn(input_down)
+
+
+##select genes that are upregulated in both OP and POla 
+
+
+
+
+```
+
+```{r}
+
+
+venn_up_sort <- venn_up %>% filter(is.na(logFC.x))
+
+only_up_both <- venn_up %>% filter(!is.na(logFC.y)) %>% filter(!is.na(logFC.x))
+
+only_up_both_top <- only_up_both[order(only_up_both$PValue.y), ]
+
+
+
+
+
+
+```
+
+
+
+     
+
+
+
+```{r}
+#se
+
+```
+
+
+
+
+# Pathway enrichment 
+
+```{r, opla pathway enrichment}
+
+names(deg_opla)[names(deg_opla)=='ensembl']<- 'ENSEMBL'
+names(deg_opla)[names(deg_opla)=='symbol']<- 'SYMBOL'
+
+entrez <- bitr(deg_opla$ENSEMBL, fromType = "ENSEMBL",
+                 toType = "ENTREZID",
+                 OrgDb="org.Hs.eg.db")
+
+deg_opla_enrich <- deg_opla %>% left_join(entrez,.,by="ENSEMBL")
+
+
+ekegg_deg_OPLA_list <- enrichKEGG(gene = deg_opla_enrich$ENTREZID,
+                    organism = 'hsa')
+
+deg_opla_list_enrich <- barplot(ekegg_deg_OPLA_list, showCategory=10)
+
+deg_opla_list_enrich
+```
+
+```{r, opla pathway map}
+
+
+edox_deg_opla_list <- setReadable(ekegg_deg_OPLA_list, 'org.Hs.eg.db', 'ENTREZID')
+
+deg_opla_enrich <- as.data.frame(deg_opla_enrich)
+
+fc.vector <- as.numeric(deg_opla_enrich[, 4])
+names(fc.vector) <- (deg_opla_enrich[, 2]) # it needs entrz ID for names
+de.names <- names(fc.vector)
+
+
+cnetplot(edox_deg_opla_list,foldChange   = fc.vector, showCategory = 2,)
+```
+
+```{r, OPLA dotplot}
+#png("top_4.png", height = 20, width = 35, res = 600, units = "cm")
+dotplot(edox_deg_opla_list, showCategory=10)
+```
+
+
+```{r}
+
+
+ppar_pathway <- pathview(gene.data  = toptable1,
+                                   pathway.id = "hsa03320",
+                    map.cpdname= TRUE,
+                                   species    = "hsa",
+                                  limit = list(gene = 1, cpd = 1),bins = list(gene = 8,cpd = 8))
+
+```
+
+
+
+POLA time....
+
+```{r, pola pathway enrichment}
+
+names(deg_pola)[names(deg_pola)=='ensembl']<- 'ENSEMBL'
+names(deg_pola)[names(deg_pola)=='symbol']<- 'SYMBOL'
+
+entrez <- bitr(deg_pola$ENSEMBL, fromType = "ENSEMBL",
+                 toType = "ENTREZID",
+                 OrgDb="org.Hs.eg.db")
+
+deg_pola_enrich <- deg_pola %>% left_join(entrez,.,by="ENSEMBL")
+
+
+ekegg_deg_POLA_list <- enrichKEGG(gene = deg_pola_enrich$ENTREZID,
+                    organism = 'hsa')
+
+deg_pola_list_enrich <- barplot(ekegg_deg_POLA_list, showCategory=10)
+
+deg_pola_list_enrich
+```
+
+```{r, pola pathway map}
+
+
+edox_deg_pola_list <- setReadable(ekegg_deg_POLA_list, 'org.Hs.eg.db', 'ENTREZID')
+
+deg_pola_enrich <- as.data.frame(deg_pola_enrich)
+
+fc.vector <- as.numeric(deg_pola_enrich[, 4])
+names(fc.vector) <- (deg_pola_enrich[, 2]) # it needs entrz ID for names
+de.names <- names(fc.vector)
+
+
+cnetplot(edox_deg_pola_list,foldChange   = fc.vector, showCategory = 3,)
+```
+
+```{r, POLA dotplot}
+#png("top_4.png", height = 20, width = 35, res = 600, units = "cm")
+dotplot(edox_deg_pola_list, showCategory=10)
+```
+
+
+```{r}
+#png("dotplot.png", height = 10, width = 15, res = 600, units = "cm")
+
+go <- enrichGO(deg_opla_enrich$SYMBOL, OrgDb = "org.Hs.eg.db", ont="all", keyType = "SYMBOL")
+p1 <- dotplot(go, split="ONTOLOGY") + facet_grid(ONTOLOGY~., scale="free")
+#png("go_terms.png", height = 15, width = 30, res = 600, units = "cm")
+library('pathview')
+ppar_pathway <- pathview(gene.data  = fc.vector,
+                                   pathway.id = "hsa03320",
+                    map.cpdname= TRUE,
+                                   species    = "hsa",
+                                  limit = list(gene = 1, cpd = 1),bins = list(gene = 8,cpd = 8))
+
+getwd()
+```
+
+```{r}
+
+go <- enrichGO(deg_opla_enrich$SYMBOL, OrgDb = "org.Hs.eg.db", ont="all", keyType = "SYMBOL")
+p1 <- dotplot(go, split="ONTOLOGY") + facet_grid(ONTOLOGY~., scale="free")
+#png("go_terms.png", height = 15, width = 30, res = 600, units = "cm")
+library('pathview')
+protein_process <- pathview(gene.data  = fc.vector,
+                                   pathway.id = "hsa04141",
+                    map.cpdname= TRUE,
+                                   species    = "hsa",
+                                  limit = list(gene = 1, cpd = 1),bins = list(gene = 8,cpd = 8))
+
+
+
+
+
+
+```
+
+# Look at individual genes
+
+```{r generate shilpa genes}
+
+#select names from rawcounts to have the same column as toptable 
+genes <- rawcounts[rawcounts$ensembl %in%  rownames(cpm), ]
+#remove raw count data 
+#genes <- genes[,-(1:15)]
+
+#bind the information with the values from toptable
+
+
+
+# this is what you need to build everything 
+results <- merge(genes, toptable_opla, by= 'ensembl')
+
+
+shilpa_genes <-c ('INSR', 'IRS1', 'GSK3B', 'AKT1','AKT2', 'FOXO1', 'SREBF1', 'MLXIPL', 'PLIN2', 'PCSK9', 'FAF2', 'PNPLA2', 'ABHD5', 'G0S2', 'CPT1A', 'PPARA', 'MTTP', 'GCK', 'PGM1','PGM2', 'PYGL', 'GYS1','GYS2', 'CERK', 'CERS1','CERS2','CERS3','CERS4','CERS5','CERS6', 'SCD', 'ELOVL1','ELOVL2','ELOVL3','ELOVL4','ELOVL5','ELOVL6','ELOVL7', 'FASN', 'ACACA', 'DGAT1', 'DGAT2', 'HMGCS2', 'GLUL', 'GLS2', 'CPS1'  )
+
+lorna_list <- c('PER1','PER2','PER3','CRY1','CRY2','CLOCK','ARNTL','ARNTL2','NR1D2','NR1D1','RORA','RORB','RORC')
+
+
+felix <- c('SLCO1B1')
+
+APOF <- c('APOF')
+shilpa_gene_list <- filter(results, symbol %in% shilpa_genes)
+
+#shilpa_gene_list <-merge(shilpa_gene_list, cpm, by=0, all = TRUE)
+#shilpa_gene_list[is.na(shilpa_gene_list)]<- 0
+#shilpa_gene_list <- filter(shilpa_gene_list, gene_biotype =='protein_coding')
+
+```
+
+
+```{r shilpa data sort 2, eval=FALSE, include=FALSE}
+
+
+
+
+#test <- melt(shilpa_gene_list, id= 2, measure = 12:26, na.rm=TRUE)
+
+#aggdata <-aggregate(value ~ gene_name+variable, data = test,
+  #FUN=mean, na.rm=TRUE)
+#print(aggdata)
+
+#test2 <- setDT(test)[, lapply(.SD, mean), by = .(variable, gene_name)] 
+
+```
+
+
+```{r,eval = FALSE, echo = FALSE}
+
+shilpa_gene_list$control=rowMeans(shilpa_gene_list[,c("FBSN_01","FBSN_02","FBSN_03","FBSN_04","FBSN_05")], na.rm=TRUE)
+shilpa_gene_list$opla=rowMeans(shilpa_gene_list[,c("FBSN_06","FBSN_07","FBSN_08","FBSN_09","FBSN_10")], na.rm=TRUE)
+shilpa_gene_list$pola=rowMeans(shilpa_gene_list[,c("FBSN_11","FBSN_12","FBSN_13","FBSN_14","FBSN_15")], na.rm=TRUE)
+
+shilpa_gene_list$sd_control=rowSds(shilpa_gene_list[,c("FBSN_01","FBSN_02","FBSN_03","FBSN_04","FBSN_05")], na.rm=TRUE)
+shilpa_gene_list$sd_opla=rowSds(shilpa_gene_list[,c("FBSN_06","FBSN_07","FBSN_08","FBSN_09","FBSN_10")], na.rm=TRUE)
+shilpa_gene_list$sd_pola=rowSds(shilpa_gene_list[,c("FBSN_11","FBSN_12","FBSN_13","FBSN_14","FBSN_15")], na.rm=TRUE)
+
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_01']<- 'control'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_02']<- 'control'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_03']<- 'control'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_04']<- 'control'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_05']<- 'control'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_06']<- 'opla'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_07']<- 'opla'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_08']<- 'opla'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_09']<- 'opla'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_10']<- 'opla'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_11']<- 'pola'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_12']<- 'pola'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_13']<- 'pola'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_14']<- 'pola'
+names(shilpa_gene_list)[names(shilpa_gene_list)=='FBSN_15']<- 'pola'
+
+gene_plot <-  melt(shilpa_gene_list, id= 2, measure = 27:29, na.rm=TRUE)
+##change number 28 to 29 if including pola data 
+names(gene_plot)[names(gene_plot)=='variable']<- 'condition'
+names(gene_plot)[names(gene_plot)=='value']<- 'mean'
+
+#gene_plot_sd <- melt(shilpa_gene_list, id= 2, measure = 30:32, na.rm=TRUE)
+# row above needs changin g to 32 if you want to include pola and 31 for just opla 
+gene_plot_sd = subset(gene_plot_sd, select = -c(variable,symbol) )
+names(gene_plot_sd)[names(gene_plot_sd)=='value']<- 'sd'
+gene_plot_all <- cbind(gene_plot, gene_plot_sd)
+
+```
+
+```{r,eval = FALSE, echo = FALSE}
+ggplot(gene_plot_all, aes(x=condition, y= mean))+
+  geom_col()+
+  theme_cowplot(12)+
+  geom_errorbar(aes(ymax= mean+sd, ymin= mean-sd),width=0.2)+
+  facet_wrap(~ gene_name, scales='free')
+
+
+```
+
+```{r,eval = FALSE, echo = FALSE}
+
+shilpa_cpm <- cpm(counts[rownames(counts)%in%shilpa_gene_list$Row.names,], normalized=TRUE)
+
+m <- list(counts= as.numeric(shilpa_cpm), group=as.factor(samplemetadata$fat_type))
+
+m <- as.data.frame(m)
+
+p <- ggplot(m, aes(group, counts)) +
+  geom_boxplot()
+
+
+p
+
+
+shilpa_cpm <- shilpa_cpm %>% as.matrix()
+
+cal_z_score <- function(x){
+  (x-mean(x)/sd(x))
+}
+
+shilpa_cpm2 <- t(apply(shilpa_cpm,1, cal_z_score))
+
+breaksList = seq(1e4, 5e5, by = 5)
+
+pheatmap::pheatmap(shilpa_cpm2,
+                   color = colorRampPalette(rev(brewer.pal(n = 11, name = "Spectral")))(length(breaksList)), 
+                   breaks = breaksList) 
+```
+

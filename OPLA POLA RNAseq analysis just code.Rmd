@@ -1,0 +1,501 @@
+---
+title: "<center> OPLA POLA RNAseq analysis <center>"
+author: "<center> Felix Westcott <center><br>"
+date: "<center> _`r Sys.Date()`_ <center>"
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(edgeR)
+library(limma)
+library(FactoMineR)
+library(factoextra)
+library(cowplot)
+library(gt)
+library(DT)
+library(ggplot2)
+library(EnhancedVolcano)
+library(ggpubr)
+library(gplots)
+library(venn)
+library(GenomeInfoDbData)
+library(org.Hs.eg.db)
+library(clusterProfiler)
+library(pathview)
+
+```
+
+``` {R Loading data}
+# Load data
+Raw_counts <- read.delim ('Counts.txt')
+samplemetadata <-read.delim ('Sample_info.txt')
+group <- factor(samplemetadata$fat_type)
+
+# Turn raw count data into matrix with only relevant parts
+geneID <- Raw_counts$gene_name
+Raw_counts <- as.matrix(Raw_counts[,2:16])
+rownames(Raw_counts) <- geneID
+
+# Create a DGEList from raw count matrix
+myDGEList <- DGEList(Raw_counts, group = group)
+
+log2.cpm <- cpm(myDGEList, log=TRUE)
+
+
+log2.cpm.df <- as_tibble(log2.cpm, rownames = "geneID")
+log2.cpm.df.pivot <- pivot_longer(log2.cpm.df,
+                                  cols = FBSN_01:FBSN_15, 
+                                  names_to = "samples",
+                                  values_to = "expression")
+
+ggplot(log2.cpm.df.pivot) +
+  aes(x=samples, y=expression, fill=samples) +
+  geom_violin(trim = FALSE, show.legend = FALSE) +
+  stat_summary(fun = "median", 
+               geom = "point", 
+               shape = 95, 
+               size = 10, 
+               color = "black", 
+               show.legend = FALSE) +
+  labs(y="log2 expression", x = "sample",
+       title="Log2 Counts per Million (CPM)",
+       subtitle="unfiltered, non-normalized") +
+  theme_bw() +
+   theme(axis.text.x = element_text(size = 7))
+```
+
+``` {R Filter and normalise data}
+
+# Filter data. NB this uses cpm but this will get calculated properly again later
+cpm <- cpm(myDGEList, log=FALSE)
+keep <- filterByExpr(cpm, group = group)
+myDGEList.filtered <- myDGEList[keep,,keep.lib.sizes=FALSE]
+
+# Normalize filtered data using TMM method
+myDGEList.filtered.norm <- calcNormFactors(myDGEList.filtered, method = "TMM")
+
+# Express filtered and normalised data in log2(cpm)
+log2.cpm.filtered.norm <- cpm(myDGEList.filtered.norm, log=TRUE)
+
+# Also have it as a dataframe in case it comes in handy
+log2.cpm.filtered.norm.df <- as_tibble(log2.cpm.filtered.norm, rownames = "geneID")
+
+log2.cpm.filtered.norm.df.pivot <- pivot_longer(log2.cpm.filtered.norm.df, 
+                                                cols = FBSN_01:FBSN_15, 
+                                                names_to = "samples", 
+                                                values_to = "expression")
+
+ggplot(log2.cpm.filtered.norm.df.pivot) +
+  aes(x=samples, y=expression, fill=samples) +
+  geom_violin(trim = FALSE, show.legend = FALSE) +
+  stat_summary(fun = "median", 
+               geom = "point", 
+               shape = 95, 
+               size = 10, 
+               color = "black", 
+               show.legend = FALSE) +
+  labs(y="log2 expression", x = "sample",
+       title="Log2 Counts per Million (CPM)",
+       subtitle="filtered, TMM normalized") +
+  theme_bw() +
+   theme(axis.text.x = element_text(size = 7))
+
+```
+
+``` {R Gene Expression Data}
+
+# Creating a log2cpm gene expression df with averages for each condition
+Avg.gene_expression <- log2.cpm.filtered.norm.df %>% 
+  mutate(Control = (FBSN_01 + FBSN_02 + FBSN_03 + FBSN_04 + FBSN_05)/5,
+         OPLA = (FBSN_06 + FBSN_07 + FBSN_08 + FBSN_09 + FBSN_10)/5,
+         POLA = (FBSN_11 + FBSN_12 + FBSN_13 + FBSN_14 + FBSN_15)/5) %>% 
+    mutate_if(is.numeric, round, 2) %>%
+  dplyr::select(geneID, Control, OPLA, POLA)
+
+datatable(Avg.gene_expression, 
+          extensions = c('KeyTable', "FixedHeader"), 
+          filter = 'top',
+          caption = 'Table 1: log2 CPM of filtered and normalised genes in Control, OPLA and POLA',
+          options = list(keys = TRUE, 
+                         searchHighlight = TRUE, 
+                         pageLength = 10, 
+                         lengthMenu = c("10", "25", "50", "100")))
+
+```
+
+``` {R PCA analysis and scree plot}
+#This is exactly the same as before, I just added the summary print out
+
+pca.res <- prcomp(t(log2.cpm.filtered.norm), scale.=F, retx=T)
+
+summary(pca.res)
+
+screeplot(pca.res, type = "l", main = "Scree plot first 10 PCs")
+
+```
+
+``` {R individual PCA plot}
+#This is exactly the same as before I think
+
+fviz_pca_ind(pca.res, geom.ind = "point", pointshape = 21, 
+             pointsize = 2, 
+             fill.ind = group,
+             palette = c("red","deepskyblue3","lightgreen"),
+             col.ind = "black", 
+             addEllipses = TRUE,
+             label = "var",
+             col.var = "black",
+             repel = TRUE,
+             legend.title = "Group") +
+   theme(axis.text.x = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.text.y = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.x = element_text(color = "black", size = 15, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.y = element_text(color = "black", size = 15, angle = 90, hjust = .5, vjust = .5, face = "plain"))
+```
+
+
+``` {R PCA 'small mulitples' plots}
+
+# This is all new so I'll explain what I'm doing.
+
+# Take results of first four PCAs and turn into tibble with sample names and fat types as added rows
+
+pca.res.df <- pca.res$x[,1:4] %>%
+  as_tibble() %>%
+  add_column(sample = samplemetadata$sample_name,
+             group = group)
+  
+#Pivot the table to make it tidy and easier to facet graph
+
+pca.pivot <- pivot_longer(pca.res.df, 
+                          cols = PC1:PC4, 
+                          names_to = "PC", 
+                          values_to = "loadings")
+
+#Graph - this graph illustrates if there are any obvious confounding variables among your samples (ie batch effects etc.)
+
+ggplot(pca.pivot) +
+  aes(x=sample, y=loadings, fill=group) + 
+  geom_bar(stat="identity") +
+  facet_wrap(~PC) +
+  labs(title="PCA 'small multiples' plot") +
+  theme_bw() +
+  coord_flip() +
+theme(axis.text.x = element_text(color = "black", size = 8, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.text.y = element_text(color = "black", size = 8, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.x = element_text(color = "black", size = 12, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+      axis.title.y = element_text(color = "black", size = 12, angle = 90, hjust = .5, vjust = .5, face = "plain"))
+
+```
+
+``` {R Differential Gene Expression Analysis!}
+
+# Pretty much all the same as before I just tidied this up quite a bit and put it all in one place for you
+
+# Design matrix - exactly the same as before
+design <- model.matrix(~0 + group)
+colnames(design) <- levels(group)
+
+# Contrast matrix - slight changes to before just to tidy up
+contrast.matrix1 <- makeContrasts(OPLAvsControl = OPLA-Control, levels=design)
+contrast.matrix2 <- makeContrasts(POLAvsControl = POLA-Control, levels=design)
+contrast.matrix3 <- makeContrasts(POLAvsOPLA = POLA-OPLA, levels=design)
+
+# Estimate common dispersion, trended dispersions and tagwise dispersions from filtered and normalized raw data (ie not cpm or log)
+y <- estimateDisp(myDGEList.filtered.norm, design, robust = TRUE)
+fit <- glmFit(y, design)
+
+# Likelihood ratio test OPLA vs Control. 
+res1 <- glmLRT(fit, contrast = contrast.matrix1)
+results1 <- topTags (res1, sort.by = NULL, n=Inf, adjust.method = "BH")
+toptable1 <- results1$table %>%
+  as_tibble(rownames = "geneID")
+
+# Likelihood ratio test POLA vs Control.
+res2 <- glmLRT(fit, contrast = contrast.matrix2)
+results2 <- topTags (res2, sort.by = NULL, n=Inf, adjust.method = "BH")
+toptable2 <- results2$table %>%
+  as_tibble(rownames = "geneID")
+
+# Likelihood ratio test POLA vs OPLA. 
+res3 <- glmLRT(fit, contrast = contrast.matrix3)
+results3 <- topTags (res3, sort.by = NULL, n=Inf, adjust.method = "BH")
+toptable3 <- results3$table %>%
+  as_tibble(rownames = "geneID")
+
+# NB: FDR column is adjusted p-value using BH correction for multiple comparisons
+
+DGEResults <- cbind(toptable1$geneID, toptable1$logFC, toptable2$logFC, toptable3$logFC, toptable1$FDR, toptable2$FDR, toptable3$FDR) %>%
+  as.data.frame() %>%
+  rename(geneID = V1, "OPLA vs Control LogFC" = V2, "POLA vs Control logFC" = V3, "POLA vs OPLA logFC" = V4, "OPLA vs Control p.adj" = V5, "POLA vs Control p.adj" = V6, "POLA vs OPLA p.adj" = V7)
+
+#gt(DGEResults)
+```
+
+``` {R Volcano plots!!}
+
+# Almost exactly the same just all in one place and made to look better 
+
+EnhancedVolcano(toptable1,
+    lab = toptable1$geneID,
+    x = 'logFC',
+    y = 'FDR',
+    legendPosition = "right",
+    legendLabSize = 12,
+    legendIconSize = 3,
+    labSize = 3,
+    subtitle = "OPLA vs Control",
+    pCutoff = 0.01, 
+    FCcutoff = 0.2)
+
+
+EnhancedVolcano(toptable2,
+    lab = toptable2$geneID,
+    x = 'logFC',
+    y = 'FDR',
+    legendPosition = "right",
+    legendLabSize = 12,
+    legendIconSize = 3,
+    labSize = 3,
+    subtitle = "POLA vs Control",
+    pCutoff = 0.01, 
+    FCcutoff = 0.2)
+
+
+EnhancedVolcano(toptable3,
+    lab = toptable3$geneID,
+    x = 'logFC',
+    y = 'FDR',
+    legendPosition = "right",
+    legendLabSize = 12,
+    legendIconSize = 3,
+    labSize = 3,
+    subtitle = "POLA vs OPLA",
+    pCutoff = 0.01, 
+    FCcutoff = 0.2)
+```
+
+``` {R Table of differentially expressed genes, log2cpm}
+# Decide tests go through the results of the differential gene expression analysis and catagorizes each gene into either significant up, down-regulation or no significnat change (1,-1 and 0 respectively). IMPORTANT - p.value and lfc are obviously the p-value and lfc cutoff for if genes are classed as differentially expressed. These can and probably should be changed and will have an impact on the results from here on. Currently set to same parameters as the volcano plots are.  
+
+Decision_results1 <- decideTests(res1, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
+Decision_results2 <- decideTests(res2, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
+Decision_results3 <- decideTests(res3, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
+
+# I've combined the results of these three combine tests to have a column for each comparison 
+Decision_results <- as_tibble(cbind(Decision_results1, Decision_results2, Decision_results3), rownames = "geneID")
+
+# Here I've taken our average gene expression df we made and ask it to keep all the genes with a significant lfc as decided by the results of our decision tests
+diffGenes.avg <- Avg.gene_expression[Decision_results[,2] !=0 | Decision_results[,3] !=0 | Decision_results[,4] !=0,]
+diffGenes.avg.df <- as_tibble(diffGenes.avg)
+
+# Created interactive and searchable table of all the significantly differentially expressed genes
+datatable(diffGenes.avg.df, 
+          extensions = c('KeyTable', "FixedHeader"), 
+          caption = 'Table 1: DEGs for Control, OPLA and POLA',
+          options = list(keys = TRUE, searchHighlight = TRUE, pageLength = 10, lengthMenu = c("10", "25", "50", "100"))) %>%
+  formatRound(columns=c(2:4), digits=2)
+
+```
+
+``` {R Graph Individual Genes}
+# Pivot to tidy up data
+diffGenes.avg.df.pivot <- pivot_longer(diffGenes.avg.df, 
+                          cols = Control : POLA, 
+                          names_to = "fat type", 
+                          values_to = "log2(cpm)")
+
+#  Filter for genes you want. grepl will pick out any with that phrase in it. Use " x | y | z | etc." notation to search for multiple genes. 
+graph <- diffGenes.avg.df.pivot %>%
+  dplyr::filter(grepl('LIPA', geneID))
+
+# Graph error bars were a set too far for me as they got messed up with the facet wrap
+ggbarplot(graph, "fat type", "log2(cpm)", palette = "npg", legend = "none", fill = "fat type") +
+  facet_wrap(~geneID) +
+  scale_y_continuous(expand = c(0,0), limits = c(0, 12)) +
+theme(axis.text.x = element_text(color = "grey20", size = 16),
+axis.text.y = element_text(color = "grey20", size = 16),
+axis.title.x = element_text(color = "grey20", size = 18),
+axis.title.y = element_text(color = "grey20", size = 18))
+
+```
+``` {R Venn Diagram}
+#This is exactly the same as before I have just used the decision results from earlier to filter for up and down regulated genes instead of doing it manually
+
+venn_opla_up <- toptable1[Decision_results[,2] >0,]
+venn_opla_down <- toptable1[Decision_results[,2] <0,]
+venn_pola_up <- toptable2[Decision_results[,3] >0,]
+venn_pola_down <- toptable2[Decision_results[,3] <0,]
+
+venn_up <-merge(venn_opla_up,venn_pola_up, by= "geneID", all.x=TRUE, all.y=TRUE)
+
+OPLA_up <- venn_up[!is.na(venn_up$logFC.x), "geneID"]
+POLA_up <- venn_up[!is.na(venn_up$logFC.y), "geneID"]
+input_up <-list("Upregulated in OPLA"=OPLA_up, "Upregulated in POLA"=POLA_up)
+venn(input_up)
+
+
+venn_down <-merge(venn_opla_down,venn_pola_down, by= "geneID", all.x=TRUE, all.y=TRUE)
+
+OPLA_down <- venn_down[!is.na(venn_down$logFC.x), "geneID"]
+POLA_down <- venn_down[!is.na(venn_down$logFC.y), "geneID"]
+input_down <-list("Downregulated in OPLA"=OPLA_down, "Downregulated in POLA"=POLA_down)
+venn(input_down)
+
+```
+
+
+``` {R Clustering}
+# I'm again using that big Decision results table to filter out all non-significant differential expressed genes from our log2cpm data
+diffGenes <- log2.cpm.filtered.norm.df[Decision_results[,2] !=0 | Decision_results[,3] !=0 | Decision_results[,4] !=0,] %>% 
+  column_to_rownames(var="geneID") %>%
+  as.matrix
+
+# This is just stuff for the dendrogram to do clustering. Trust me, I copied it off the internet.
+clustRows <- hclust(as.dist(1-cor(t(diffGenes), method="pearson")), method="complete")
+clustColumns <- hclust(as.dist(1-cor(diffGenes, method="spearman")), method="complete")
+
+# Change K = it you want to cluster you genes into more than two (change it and you'll see what I mean)
+module.assign <- cutree(clustRows, k=2)
+
+# Boring code just to get the little colour bar by the side of the genes
+module.color <- rainbow(length(unique(module.assign)), start=0.1, end=0.9) 
+module.color <- module.color[as.vector(module.assign)]
+
+# Actual heatmap
+heatmap.2(diffGenes, 
+          Rowv=as.dendrogram(clustRows), 
+          Colv=as.dendrogram(clustColumns),
+          RowSideColors=module.color,
+          scale='row', labRow=NA,
+          density.info="none", trace="none",  
+          cexRow=1, cexCol=1, margins=c(8,20)) 
+
+```
+
+``` {R Heatmap of selected genes}
+# Change whatever is in the filter function to change which genes are plotted
+selected_genes <- diffGenes %>%
+  as_tibble(rownames = "geneID") %>%
+  dplyr::filter(grepl('ATG', geneID)) %>%
+ column_to_rownames(var="geneID") %>%
+  as.matrix
+
+# I stripped this one down a lot because otherwise was a bit OTT
+heatmap.2(selected_genes, 
+          Rowv= NULL, 
+          Colv=NULL,
+          dendrogram = 'none',
+          scale='row',
+          density.info="none", trace="none",  
+          cexRow= 0.9, cexCol=0.9, margins=c(8,20))
+
+```
+
+``` {R OPLA function enrichment analysis}
+
+diffGenes.OPLA <- toptable1[Decision_results[,2] !=0,] %>%
+rename("SYMBOL" = geneID)
+
+entrez <- bitr(diffGenes.OPLA$SYMBOL, fromType = "SYMBOL",
+                 toType = "ENTREZID",
+                 OrgDb="org.Hs.eg.db")
+
+deg_opla_enrich <- diffGenes.OPLA %>% left_join(entrez,.,by="SYMBOL")
+
+ekegg_deg_OPLA_list <- enrichKEGG(gene = deg_opla_enrich$ENTREZID,
+                    organism = 'hsa')
+
+edox_deg_opla_list <- setReadable(ekegg_deg_OPLA_list, 'org.Hs.eg.db', 'ENTREZID')
+
+dotplot(edox_deg_opla_list, showCategory=10)
+```
+
+
+``` {R OPLA pathway enrichment, warning=FALSE}
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+
+#This is the same as before
+fc.vector <- as.numeric(deg_opla_enrich[, 3])
+names(fc.vector) <- (deg_opla_enrich[, 2])
+de.names <- names(fc.vector)
+
+pathview(gene.data  = fc.vector, pathway.id = "hsa00010",species  = "hsa")
+
+```
+
+
+
+``` {R POLA functional enrichment analysis}
+
+# same as before
+diffGenes.POLA <- toptable2[Decision_results[,3] !=0,] %>% 
+  rename("SYMBOL" = geneID)
+
+entrez <- bitr(diffGenes.POLA$SYMBOL, fromType = "SYMBOL",
+                 toType = "ENTREZID",
+                 OrgDb="org.Hs.eg.db")
+
+deg_pola_enrich <- diffGenes.POLA %>% left_join(entrez,.,by="SYMBOL")
+
+ekegg_deg_POLA_list <- enrichKEGG(gene = deg_pola_enrich$ENTREZID,
+                    organism = 'hsa')
+
+edox_deg_pola_list <- setReadable(ekegg_deg_POLA_list, 'org.Hs.eg.db', 'ENTREZID')
+
+dotplot(edox_deg_pola_list, showCategory=10)
+
+```
+
+
+``` {R POLA pathway enrichment, warning =FALSE}
+
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+
+#This is the same as before
+fc.vector <- as.numeric(deg_pola_enrich[, 3])
+names(fc.vector) <- (deg_pola_enrich[, 2])
+de.names <- names(fc.vector)
+
+pathview(gene.data  = fc.vector, pathway.id = "hsa04932",species  = "hsa")
+
+
+```
+
+
+
+``` {R POLA vs OPLA function enrichment analysis}
+
+# Same as before 
+diffGenes.POLA.OPLA <- toptable3[Decision_results[,4] !=0,] %>% 
+  rename("SYMBOL" = geneID)
+
+entrez <- bitr(diffGenes.POLA.OPLA$SYMBOL, fromType = "SYMBOL",
+                 toType = "ENTREZID",
+                 OrgDb="org.Hs.eg.db")
+
+deg_pola_opla_enrich <- diffGenes.POLA.OPLA %>% left_join(entrez,.,by="SYMBOL")
+
+ekegg_deg_POLA_OPLA_list <- enrichKEGG(gene = deg_pola_opla_enrich$ENTREZID,
+                    organism = 'hsa')
+
+edox_deg_pola_opla_list <- setReadable(ekegg_deg_POLA_OPLA_list, 'org.Hs.eg.db', 'ENTREZID')
+
+dotplot(edox_deg_pola_opla_list, showCategory=10)
+
+```
+
+``` {R OPLA POLA pathway enrichment, warning=FALSE}
+
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+
+#This is the same as before
+fc.vector <- as.numeric(deg_pola_opla_enrich[, 3])
+names(fc.vector) <- (deg_pola_opla_enrich[, 2])
+de.names <- names(fc.vector)
+
+pathview(gene.data  = fc.vector, pathway.id = "hsa04932",species  = "hsa")
+
+
+```
