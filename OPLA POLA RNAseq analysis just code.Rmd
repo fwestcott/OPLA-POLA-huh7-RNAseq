@@ -414,7 +414,7 @@ dotplot(edox_deg_opla_list, showCategory=10)
 
 
 ``` {R OPLA pathway enrichment, warning=FALSE}
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 #This is the same as before
 fc.vector <- as.numeric(deg_opla_enrich[, 3])
@@ -451,7 +451,7 @@ dotplot(edox_deg_pola_list, showCategory=10)
 
 ``` {R POLA pathway enrichment, warning =FALSE}
 
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 #This is the same as before
 fc.vector <- as.numeric(deg_pola_enrich[, 3])
@@ -488,7 +488,7 @@ dotplot(edox_deg_pola_opla_list, showCategory=10)
 
 ``` {R OPLA POLA pathway enrichment, warning=FALSE}
 
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 #This is the same as before
 fc.vector <- as.numeric(deg_pola_opla_enrich[, 3])

@@ -519,7 +519,7 @@ The package [pathview](https://pathview.uncc.edu/) uses [KEGG pathways](https://
 ## OPLA versus control
 
 ``` {R OPLA pathway enrichment, warning=FALSE}
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 #This is the same as before
 fc.vector <- as.numeric(deg_opla_enrich[, 3])
@@ -537,7 +537,7 @@ grid.raster(img)
 
 ``` {R POLA pathway enrichment, warning =FALSE}
 
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 #This is the same as before
 fc.vector <- as.numeric(deg_pola_enrich[, 3])
@@ -555,7 +555,7 @@ grid.raster(img)
 
 ``` {R OPLA POLA pathway enrichment, warning=FALSE}
 
-setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA POLA RNAseq/Pathview")
+setwd("C:/Users/fwestcott/OneDrive - Nexus365/Desktop/Results/OPLA-POLA-huh7-RNAseq/Pathview")
 
 diffGenes.POLA.OPLA <- toptable3[Decision_results[,4] !=0,] %>% 
   rename("SYMBOL" = geneID)
