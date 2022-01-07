@@ -570,9 +570,9 @@ fc.vector <- as.numeric(deg_pola_opla_enrich[, 3])
 names(fc.vector) <- (deg_pola_opla_enrich[, 2])
 de.names <- names(fc.vector)
 
-pathview(gene.data  = fc.vector, pathway.id = "hsa04140",species  = "hsa")
+pathview(gene.data  = fc.vector, pathway.id = "hsa04110",species  = "hsa")
 
-img <- readPNG('hsa04140.pathview.png')
+img <- readPNG('hsa04110.pathview.png')
 grid.raster(img)
 
 ```
