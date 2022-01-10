@@ -279,9 +279,9 @@ EnhancedVolcano(toptable3,
 ``` {R Table of differentially expressed genes, log2cpm}
 # Decide tests go through the results of the differential gene expression analysis and catagorizes each gene into either significant up, down-regulation or no significnat change (1,-1 and 0 respectively). IMPORTANT - p.value and lfc are obviously the p-value and lfc cutoff for if genes are classed as differentially expressed. These can and probably should be changed and will have an impact on the results from here on. Currently set to same parameters as the volcano plots are.  
 
-Decision_results1 <- decideTests(res1, method="global", adjust.method="BH", p.value=0.05, lfc = 0.1)
-Decision_results2 <- decideTests(res2, method="global", adjust.method="BH", p.value=0.05, lfc = 0.1)
-Decision_results3 <- decideTests(res3, method="global", adjust.method="BH", p.value=0.05, lfc = 0.1)
+Decision_results1 <- decideTests(res1, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
+Decision_results2 <- decideTests(res2, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
+Decision_results3 <- decideTests(res3, method="global", adjust.method="BH", p.value=0.01, lfc = 0.2)
 
 # I've combined the results of these three combine tests to have a column for each comparison 
 Decision_results <- as_tibble(cbind(Decision_results1, Decision_results2, Decision_results3), rownames = "geneID")
@@ -293,7 +293,7 @@ diffGenes.avg.df <- as_tibble(diffGenes.avg)
 # Created interactive and searchable table of all the significantly differentially expressed genes
 datatable(diffGenes.avg.df, 
           extensions = c('KeyTable', "FixedHeader"), 
-          caption = 'Table 1: DEGs for Control, OPLA and POLA',
+          caption = 'Table 2: log2 CPM of DEGs in Control, OPLA and POLA',
           options = list(keys = TRUE, searchHighlight = TRUE, pageLength = 10, lengthMenu = c("10", "25", "50", "100"))) %>%
   formatRound(columns=c(2:4), digits=2)
 
@@ -308,7 +308,7 @@ diffGenes.avg.df.pivot <- pivot_longer(diffGenes.avg.df,
 
 #  Filter for genes you want. grepl will pick out any with that phrase in it. Use " x | y | z | etc." notation to search for multiple genes. 
 graph <- diffGenes.avg.df.pivot %>%
-  dplyr::filter(grepl('MAPK9', geneID))
+  dplyr::filter(grepl('FOX01', geneID))
 
 # Graph error bars were a set too far for me as they got messed up with the facet wrap
 ggbarplot(graph, "fat type", "log2(cpm)", palette = "npg", legend = "none", fill = "fat type") +
@@ -320,6 +320,7 @@ axis.title.x = element_text(color = "grey20", size = 16),
 axis.title.y = element_text(color = "grey20", size = 16))
 
 ```
+
 ``` {R Venn Diagram}
 #This is exactly the same as before I have just used the decision results from earlier to filter for up and down regulated genes instead of doing it manually
 
