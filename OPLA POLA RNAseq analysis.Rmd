@@ -454,7 +454,7 @@ heatmap.2(selected_genes,
           dendrogram = 'none',
           scale='row',
           density.info="none", trace="none",  
-          cexRow= 1, cexCol=1, margins=c(8,20))
+          cexRow= 1, cexCol=0.8, margins=c(8,20))
 
 ```
 
@@ -572,7 +572,7 @@ de.names <- names(fc.vector)
 
 pathview(gene.data  = fc.vector, pathway.id = "hsa04110",species  = "hsa")
 
-img <- readPNG('hsa04110.pathview.png')
+img <- readPNG('hsa04140.pathview.png')
 grid.raster(img)
 
 ```
